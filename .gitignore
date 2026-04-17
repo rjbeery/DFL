@@ -1,0 +1,10 @@
+*
+!*.py
+!*.md
+!*.txt
+!*.jpg
+!requirements*
+!Dockerfile*
+!*.sh
+!.env.example
+# .env (real secrets) stays ignored — never commit it

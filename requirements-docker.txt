@@ -1,0 +1,21 @@
+# DFL runtime dependencies for the Docker container (Python 3.8 + CUDA 11.0)
+#
+# Pinned to match requirements-cuda.txt exactly except:
+#   pyqt5      — GUI toolkit, not needed in a headless container
+#   tf2onnx    — export utility, not needed for extract/train/merge
+#   opencv-python replaced by opencv-python-headless (no X11 dependency)
+#   tensorflow-gpu==2.4.0 retained (requires CUDA 11.0 / cuDNN 8)
+#   protobuf pinned to 3.20.x — TF 2.4 breaks with protobuf >= 4.0
+#   scikit-image bumped to 0.17.2 — 0.14.2 has no Python 3.8 wheel
+
+tqdm
+numpy==1.19.3
+numexpr
+h5py==2.10.0
+opencv-python-headless==4.1.2.30
+ffmpeg-python==0.1.17
+scikit-image==0.17.2
+scipy==1.4.1
+colorama
+protobuf==3.20.3
+tensorflow-gpu==2.4.0
