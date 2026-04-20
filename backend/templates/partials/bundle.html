@@ -1,0 +1,64 @@
+<div id="bundle-panel">
+
+    <!-- Last result banner -->
+    {% if last_result %}
+    {% set r = last_result %}
+    <div class="msg msg-{{ 'ok' if r.ok else 'error' }}" style="margin-bottom:0.85rem;font-size:0.82rem">
+        {% if r.action == 'export' %}
+            {% if r.ok %}
+                &#x2713; Exported &mdash; {{ r.preset_count }} preset(s), {{ r.job_count }} job(s).
+            {% else %}
+                &#x2717; Export failed: {{ r.error }}
+            {% endif %}
+        {% else %}
+            {% if r.ok %}
+                &#x2713; Imported &mdash; {{ r.preset_count }} preset(s), {{ r.job_count }} job(s).
+            {% else %}
+                &#x2717; Import failed: {{ r.error }}
+            {% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Export ──────────────────────────────────────────────────────────── -->
+    <div class="field-section-title">Export</div>
+    <p style="font-size:0.82rem;color:#52525b;margin-bottom:0.5rem">
+        Downloads a JSON bundle: config, presets, and recent job history.
+        No model binaries are included.
+    </p>
+    {% if summary %}
+    <p style="font-size:0.78rem;color:#71717a;margin-bottom:0.65rem">
+        Current: <strong>{{ summary.preset_count }}</strong> preset(s) &middot;
+        <strong>{{ summary.job_count }}</strong> job(s)
+        {% if summary.model_dir %}&middot; model dir: <code>{{ summary.model_dir }}</code>{% endif %}
+    </p>
+    {% endif %}
+    <button class="btn-save" id="export-btn" onclick="exportBundle()"
+            style="padding:0.45rem 0.85rem">
+        &#x21E9; Export bundle
+    </button>
+
+    <!-- Import ──────────────────────────────────────────────────────────── -->
+    <div class="field-section-title" style="margin-top:1.1rem">Import</div>
+    <p style="font-size:0.82rem;color:#52525b;margin-bottom:0.5rem">
+        Replaces config, presets, and job history from a previously exported bundle.
+        Model files are <strong>not</strong> touched.
+    </p>
+    <div style="display:flex;gap:0.45rem;align-items:center;flex-wrap:wrap;margin-bottom:0.3rem">
+        <input type="file" id="bundle-file-input" accept=".json,application/json"
+               style="flex:1;min-width:0;font-size:0.82rem">
+        <button id="import-btn" onclick="importBundle()"
+                style="background:#dc2626;color:#fff;border:none;border-radius:6px;
+                       padding:0.45rem 0.85rem;cursor:pointer;font-size:0.875rem;
+                       font-weight:500;white-space:nowrap">
+            Import
+        </button>
+    </div>
+    <p style="font-size:0.75rem;color:#a1a1aa">
+        &#x26A0; Existing config, presets, and job history will be replaced.
+        A confirmation dialog will appear.
+    </p>
+
+    <div id="bundle-messages" style="margin-top:0.75rem;font-size:0.85rem;min-height:1.2rem"></div>
+
+</div>

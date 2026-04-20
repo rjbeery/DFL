@@ -1,0 +1,21 @@
+{% if files %}
+{% for f in files %}
+<div style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0;border-bottom:1px solid #f4f4f5;flex-wrap:wrap">
+    <span style="flex:1;min-width:0;font-family:ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.filename }}</span>
+    <span style="color:#71717a;white-space:nowrap;font-size:0.78rem">{{ "%.1f"|format(f.size / 1048576) }}&nbsp;MB</span>
+    <select id="bucket-{{ f.filename }}"
+            style="font-size:0.78rem;padding:0.2rem 0.35rem;border:1px solid #d4d4d8;border-radius:4px;background:#fff">
+        <option value="data_src">data_src</option>
+        <option value="data_dst">data_dst</option>
+        <option value="model">model</option>
+    </select>
+    <button onclick="moveUpload({{ f.filename | tojson }})"
+            style="font-size:0.78rem;padding:0.2rem 0.55rem;background:#2563eb;color:#fff;
+                   border:none;border-radius:4px;cursor:pointer;white-space:nowrap">
+        Move
+    </button>
+</div>
+{% endfor %}
+{% else %}
+<span style="color:#a1a1aa">No files in /workspace/uploads.</span>
+{% endif %}

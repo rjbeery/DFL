@@ -1,0 +1,67 @@
+<div id="files-panel">
+
+    <!-- Root selector row -->
+    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem">
+        <select id="files-root-select"
+                onchange="onFilesRootChange()"
+                style="flex:0 0 auto;padding:0.38rem 0.55rem;border:1px solid #d4d4d8;
+                       border-radius:5px;font-size:0.82rem;background:#fff">
+            <option value="">-- select location --</option>
+        </select>
+        <span id="files-root-path"
+              style="font-size:0.75rem;color:#71717a;font-family:ui-monospace,monospace;
+                     flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+    </div>
+
+    <!-- Breadcrumb -->
+    <div id="files-breadcrumb"
+         style="font-size:0.78rem;margin-bottom:0.55rem;font-family:ui-monospace,monospace;
+                color:#52525b;min-height:1.1rem"></div>
+
+    <!-- Upload area — shown only when the current root allows uploads -->
+    <div id="files-upload-area"
+         style="display:none;background:#f9fafb;border:1px dashed #d4d4d8;border-radius:6px;
+                padding:0.6rem 0.75rem;margin-bottom:0.65rem">
+        <div style="font-size:0.8rem;font-weight:600;color:#52525b;margin-bottom:0.35rem">
+            Upload to this location
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+            <input type="file" id="files-upload-input" multiple
+                   style="flex:1;min-width:0;font-size:0.82rem">
+            <button id="files-upload-btn" onclick="uploadFiles()"
+                    style="background:#2563eb;color:#fff;border:none;border-radius:6px;
+                           padding:0.38rem 0.75rem;cursor:pointer;font-size:0.82rem;
+                           font-weight:500;white-space:nowrap">
+                &#x2191; Upload
+            </button>
+        </div>
+        <div style="font-size:0.72rem;color:#a1a1aa;margin-top:0.2rem">
+            Max 2 GB per file. Files are written to the selected directory.
+        </div>
+    </div>
+
+    <!-- Action row: refresh + zip + item count -->
+    <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.45rem;flex-wrap:wrap">
+        <button onclick="refreshListing()"
+                style="font-size:0.78rem;padding:0.2rem 0.55rem;background:#f1f5f9;color:#52525b;
+                       border:1px solid #d4d4d8;border-radius:4px;cursor:pointer">
+            &#x21BB; Refresh
+        </button>
+        <button id="files-zip-btn" onclick="zipCurrentDir()"
+                style="display:none;font-size:0.78rem;padding:0.2rem 0.55rem;
+                       background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;
+                       border-radius:4px;cursor:pointer;font-weight:500">
+            &#x1F4E6; Download as ZIP
+        </button>
+        <span id="files-count" style="font-size:0.75rem;color:#a1a1aa"></span>
+    </div>
+
+    <!-- Listing table -->
+    <div id="files-listing" style="font-size:0.82rem;overflow-x:auto">
+        <span style="color:#a1a1aa">Select a location above to browse files.</span>
+    </div>
+
+    <div id="files-messages"
+         style="margin-top:0.65rem;font-size:0.85rem;min-height:1.2rem"></div>
+
+</div>

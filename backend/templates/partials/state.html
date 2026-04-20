@@ -1,0 +1,83 @@
+<div id="state-panel"
+     data-status="{{ status }}"
+     data-recovered="{{ 'true' if recovered else 'false' }}"
+     hx-get="/state/partial"
+     hx-trigger="every 3s"
+     hx-target="this"
+     hx-swap="outerHTML">
+
+    {% if recovered %}
+    <div class="recovered-banner">
+        &#9888; Previous session was interrupted — state loaded from disk.
+        Verify logs before starting a new run.
+    </div>
+    {% endif %}
+
+    <table class="state-table">
+        <tr>
+            <th>Status</th>
+            <td><span class="badge badge-{{ status }}">{{ status }}</span></td>
+        </tr>
+        <tr>
+            <th>{{ "Stage" if is_running else "Last stage" }}</th>
+            <td>{{ stage or "—" }}</td>
+        </tr>
+        {% if pid %}
+        <tr>
+            <th>PID</th>
+            <td>{{ pid }}</td>
+        </tr>
+        {% endif %}
+        {% if start_time %}
+        <tr>
+            <th>Started</th>
+            <td>{{ start_time }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <th>Log lines</th>
+            <td>{{ log_lines }}</td>
+        </tr>
+        <tr>
+            <th>Image</th>
+            <td>{{ docker_image }}</td>
+        </tr>
+    </table>
+
+    {# Download banner — shown after a successful video-from-seq run #}
+    {% if result_video_exists and stage == "video-from-seq" and status == "done" %}
+    <div style="margin-top:0.75rem;padding:0.6rem 0.85rem;background:#f0fdf4;
+                border:1px solid #bbf7d0;border-radius:6px;display:flex;
+                align-items:center;gap:0.75rem;flex-wrap:wrap">
+        <span style="font-size:0.85rem;color:#166534;font-weight:600">
+            &#x2705; result.mp4 is ready
+        </span>
+        <a href="/result/download"
+           style="background:#16a34a;color:#fff;text-decoration:none;border-radius:5px;
+                  padding:0.3rem 0.75rem;font-size:0.82rem;font-weight:500;white-space:nowrap">
+            &#x2193; Save to disk
+        </a>
+    </div>
+    {% endif %}
+
+    {# Progress section — shown when a stage is active or has just finished #}
+    {% if is_running or (progress.status_text and status in ('done', 'error', 'stopped')) %}
+    <div class="progress-section">
+
+        {% if progress.status_text %}
+        <div class="progress-text">{{ progress.status_text }}</div>
+        {% endif %}
+
+        {% if progress.pct is not none %}
+        <div class="progress-bar-wrap">
+            <progress class="stage-progress" value="{{ progress.pct }}" max="100"></progress>
+            <span class="progress-pct">{{ progress.pct | int }}%</span>
+        </div>
+        {% elif is_running %}
+        <div class="indeterminate-bar"></div>
+        {% endif %}
+
+    </div>
+    {% endif %}
+
+</div>

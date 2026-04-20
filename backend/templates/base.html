@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFL Control Panel</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            font-size: 15px;
+            line-height: 1.5;
+            background: #f4f4f5;
+            color: #18181b;
+            padding: 2rem 1rem;
+        }
+
+        .container { max-width: 680px; margin: 0 auto; }
+
+        h1 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            margin-bottom: 1.25rem;
+            color: #09090b;
+        }
+
+        .card {
+            background: #fff;
+            border: 1px solid #e4e4e7;
+            border-radius: 8px;
+            padding: 1.2rem 1.4rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Status card: left-border accent reflects running state */
+        .status-card {
+            border-left-width: 3px;
+            border-left-color: #e4e4e7;
+            transition: border-left-color 0.25s;
+        }
+        .status-card[data-status="running"] { border-left-color: #22c55e; }
+        .status-card[data-status="error"]   { border-left-color: #ef4444; }
+        .status-card[data-status="stopped"] { border-left-color: #f59e0b; }
+        .status-card[data-status="done"]    { border-left-color: #3b82f6; }
+        .status-card[data-status="idle"]    { border-left-color: #e4e4e7; }
+
+        .card-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #71717a;
+            margin-bottom: 0.85rem;
+        }
+
+        /* Recovered / interrupted warning banner */
+        .recovered-banner {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+            border-radius: 5px;
+            padding: 0.4rem 0.75rem;
+            font-size: 0.82rem;
+            margin-bottom: 0.75rem;
+        }
+
+        /* State table */
+        .state-table { width: 100%; border-collapse: collapse; }
+        .state-table th {
+            text-align: left;
+            font-weight: 600;
+            color: #52525b;
+            padding: 0.25rem 0.75rem 0.25rem 0;
+            width: 7rem;
+            font-size: 0.82rem;
+            white-space: nowrap;
+        }
+        .state-table td { padding: 0.25rem 0; font-size: 0.85rem; font-family: ui-monospace, monospace; }
+
+        /* Status badge */
+        .badge {
+            display: inline-block;
+            padding: 0.15em 0.55em;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .badge-idle        { background: #f1f5f9; color: #64748b; }
+        .badge-running     { background: #dcfce7; color: #166534; }
+        .badge-done        { background: #dbeafe; color: #1e40af; }
+        .badge-error       { background: #fee2e2; color: #991b1b; }
+        .badge-stopped     { background: #fef9c3; color: #854d0e; }
+        .badge-interrupted { background: #fde68a; color: #92400e; }
+        .badge-warn        { background: #fef9c3; color: #854d0e; }
+
+        /* Preset label shown beside the status badge in history rows */
+        .badge-preset {
+            display: inline-block;
+            padding: 0.12em 0.45em;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            background: #ede9fe;
+            color: #5b21b6;
+            margin-left: 0.35rem;
+            font-family: ui-monospace, monospace;
+            letter-spacing: 0;
+        }
+
+        /* Button row */
+        .btn-row { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+
+        button {
+            padding: 0.45rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        button:active { opacity: 0.75; }
+
+        /* Disabled: visually clear, pointer events off */
+        button:disabled {
+            opacity: 0.38;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        /* In-flight indicator: HTMX adds .htmx-request to the triggering element */
+        button.htmx-request {
+            opacity: 0.65;
+            cursor: wait;
+        }
+
+        .btn-stage       { background: #2563eb; color: #fff; }
+        .btn-stage:hover { background: #1d4ed8; }
+        .btn-stop        { background: #dc2626; color: #fff; margin-left: auto; }
+        .btn-stop:hover  { background: #b91c1c; }
+
+        /* Message area */
+        #messages { margin-top: 0.85rem; min-height: 1.4rem; font-size: 0.85rem; }
+        .msg { padding: 0.45rem 0.75rem; border-radius: 6px; }
+        .msg-ok    { background: #dcfce7; color: #166534; }
+        .msg-error { background: #fee2e2; color: #991b1b; }
+        .msg-warn  { background: #fef9c3; color: #854d0e; }
+
+        footer { font-size: 0.78rem; color: #a1a1aa; margin-top: 0.25rem; }
+        footer a { color: #71717a; }
+
+        /* Progress section */
+        .progress-section { margin-top: 0.75rem; }
+        .progress-text { font-size: 0.82rem; color: #52525b; margin-bottom: 0.35rem; font-family: ui-monospace, monospace; }
+
+        .progress-bar-wrap { display: flex; align-items: center; gap: 0.5rem; }
+        .stage-progress {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            border: none;
+            appearance: none;
+            background: #e4e4e7;
+        }
+        .stage-progress::-webkit-progress-bar   { background: #e4e4e7; border-radius: 3px; }
+        .stage-progress::-webkit-progress-value { background: #2563eb; border-radius: 3px; }
+        .stage-progress::-moz-progress-bar      { background: #2563eb; border-radius: 3px; }
+        .progress-pct { font-size: 0.78rem; color: #52525b; white-space: nowrap; min-width: 2.5rem; text-align: right; }
+
+        @keyframes slide {
+            from { background-position: 0 0; }
+            to   { background-position: 48px 0; }
+        }
+        .indeterminate-bar {
+            height: 4px;
+            border-radius: 2px;
+            background: repeating-linear-gradient(
+                90deg,
+                #2563eb 0, #2563eb 16px,
+                #bfdbfe 16px, #bfdbfe 32px
+            );
+            background-size: 48px 100%;
+            animation: slide 0.7s linear infinite;
+        }
+
+        /* Config form */
+        .field-section-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.09em;
+            color: #a1a1aa;
+            margin-bottom: 0.55rem;
+        }
+        .field { flex: 1; min-width: 0; margin-bottom: 0.65rem; }
+        .field label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #52525b;
+            margin-bottom: 0.2rem;
+        }
+        .field input, .field select {
+            width: 100%;
+            padding: 0.38rem 0.55rem;
+            border: 1px solid #d4d4d8;
+            border-radius: 5px;
+            font-size: 0.82rem;
+            font-family: ui-monospace, 'Consolas', monospace;
+            color: #18181b;
+            background: #fff;
+        }
+        .field input:focus, .field select:focus {
+            outline: 2px solid #2563eb;
+            border-color: transparent;
+        }
+        .field-row { display: flex; gap: 0.75rem; }
+
+        /* Collapsible config card */
+        details.card > summary {
+            list-style: none;
+            cursor: pointer;
+            user-select: none;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #71717a;
+        }
+        details.card > summary::-webkit-details-marker { display: none; }
+        details.card > summary::after   { content: " ▾"; font-size: 0.65rem; }
+        details[open].card > summary::after { content: " ▴"; font-size: 0.65rem; }
+        details.card > summary + * { margin-top: 0.85rem; }
+
+        .btn-save       { background: #16a34a; color: #fff; }
+        .btn-save:hover { background: #15803d; }
+
+        .btn-backup       { background: #7c3aed; color: #fff; }
+        .btn-backup:hover { background: #6d28d9; }
+
+        /* History table */
+        .history-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        .history-table th {
+            text-align: left;
+            font-weight: 600;
+            color: #52525b;
+            padding: 0.2rem 0.5rem 0.2rem 0;
+            font-size: 0.75rem;
+            border-bottom: 1px solid #e4e4e7;
+        }
+        .history-table td { padding: 0.3rem 0.5rem 0.3rem 0; vertical-align: middle; }
+        .history-table tbody tr:not(:last-child) td { border-bottom: 1px solid #f4f4f5; }
+        .history-summary { margin-left: 0.4rem; font-family: ui-monospace, monospace; }
+        .history-meta { color: #71717a; white-space: nowrap; font-family: ui-monospace, monospace; }
+        .history-empty { font-size: 0.82rem; color: #a1a1aa; }
+
+        /* Clickable history rows */
+        .history-row { cursor: pointer; }
+        .history-row:hover td { background: #f9f9fb; }
+        .history-row-selected td { background: #eff6ff !important; }
+
+        /* Job detail panel rendered below the history table */
+        .history-detail {
+            margin-top: 0.85rem;
+            border-top: 1px solid #e4e4e7;
+            padding-top: 0.85rem;
+            font-size: 0.82rem;
+        }
+        .history-detail-section { font-weight: 600; color: #52525b; margin-bottom: 0.3rem; }
+        .history-detail-section + * { margin-bottom: 0.65rem; }
+        .artifact-row { font-family: ui-monospace, monospace; margin-bottom: 0.2rem; }
+
+        /* Log pane */
+        .log-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem; }
+        .log-header-right { display: flex; align-items: center; gap: 0.5rem; }
+        .conn-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: middle; }
+        .conn-on  { background: #22c55e; }
+        .conn-off { background: #d4d4d8; }
+
+        /* Jump-to-latest button — lives inside the dark log pane header area */
+        .btn-jump {
+            padding: 0.18rem 0.5rem;
+            font-size: 0.72rem;
+            font-weight: 500;
+            background: #334155;
+            color: #94a3b8;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid #475569;
+        }
+        .btn-jump:hover { background: #475569; color: #e2e8f0; }
+
+        #log-pane {
+            height: 320px;
+            overflow-y: auto;
+            background: #0f172a;
+            color: #cbd5e1;
+            font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+            font-size: 0.78rem;
+            line-height: 1.55;
+            padding: 0.75rem 0.85rem;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        #log-pane .log-line { display: block; }
+        #log-pane .log-line:last-child { padding-bottom: 0.25rem; }
+    </style>
+</head>
+<body>
+<div class="container">
+{% block content %}{% endblock %}
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

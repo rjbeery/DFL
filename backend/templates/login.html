@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width:340px; margin:3rem auto;">
+    <h1 style="text-align:center; margin-bottom:1.5rem">DFL Control Panel</h1>
+
+    <div class="card">
+        <div class="card-title" style="margin-bottom:1rem">Sign in</div>
+
+        {% if error %}
+        <div class="msg msg-error" style="margin-bottom:0.85rem">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="/login">
+            <div class="field" style="margin-bottom:1rem">
+                <label for="password">Password</label>
+                <input id="password"
+                       name="password"
+                       type="password"
+                       autofocus
+                       autocomplete="current-password"
+                       style="width:100%;padding:0.45rem 0.6rem;border:1px solid #d4d4d8;border-radius:5px;font-size:0.9rem;">
+            </div>
+            <button type="submit" class="btn-stage" style="width:100%">Sign in</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

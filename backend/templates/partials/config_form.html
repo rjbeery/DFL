@@ -1,0 +1,144 @@
+<form id="config-form"
+      hx-post="/config"
+      hx-target="#config-form"
+      hx-swap="outerHTML">
+
+    {% if save_ok %}
+    <div class="msg msg-ok" style="margin-bottom:0.85rem">Config saved.</div>
+    {% endif %}
+    {% if errors %}
+    <div class="msg msg-error" style="margin-bottom:0.85rem">
+        {% for e in errors %}<div>{{ e }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Paths ────────────────────────────────────────────────────────── -->
+    <div class="field-section-title">Paths</div>
+
+    <div class="field">
+        <label for="dfl_root">DFL root</label>
+        <input id="dfl_root" name="dfl_root" type="text" value="{{ cfg.dfl_root }}" spellcheck="false">
+    </div>
+    <div class="field">
+        <label for="workspace">Workspace</label>
+        <input id="workspace" name="workspace" type="text" value="{{ cfg.workspace }}" spellcheck="false">
+    </div>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="data_src">Source frames dir</label>
+            <input id="data_src" name="data_src" type="text" value="{{ cfg.data_src }}" spellcheck="false">
+        </div>
+        <div class="field">
+            <label for="data_src_aligned">Source aligned dir</label>
+            <input id="data_src_aligned" name="data_src_aligned" type="text" value="{{ cfg.data_src_aligned }}" spellcheck="false">
+        </div>
+    </div>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="data_dst">Destination frames dir</label>
+            <input id="data_dst" name="data_dst" type="text" value="{{ cfg.data_dst }}" spellcheck="false">
+        </div>
+        <div class="field">
+            <label for="data_dst_aligned">Destination aligned dir</label>
+            <input id="data_dst_aligned" name="data_dst_aligned" type="text" value="{{ cfg.data_dst_aligned }}" spellcheck="false">
+        </div>
+    </div>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="model_dir">Model dir</label>
+            <input id="model_dir" name="model_dir" type="text" value="{{ cfg.model_dir }}" spellcheck="false">
+        </div>
+        <div class="field">
+            <label for="output_dir">Output dir</label>
+            <input id="output_dir" name="output_dir" type="text" value="{{ cfg.output_dir }}" spellcheck="false">
+        </div>
+    </div>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="output_mask_dir">Output mask dir <span style="font-weight:400;color:#a1a1aa">(merge)</span></label>
+            <input id="output_mask_dir" name="output_mask_dir" type="text" value="{{ cfg.output_mask_dir }}" spellcheck="false">
+        </div>
+    </div>
+
+    <div style="margin-top:0.5rem;margin-bottom:0.25rem">
+        <button type="button" id="check-paths-btn"
+                style="background:#f4f4f5;color:#52525b;border:1px solid #d4d4d8;font-size:0.78rem;padding:0.28rem 0.65rem;border-radius:5px;cursor:pointer"
+                onclick="checkPaths()">&#x2713; Check paths</button>
+    </div>
+    <div id="path-check-results" style="font-size:0.8rem;margin-bottom:0.5rem"></div>
+
+    <!-- Backup / storage ─────────────────────────────────────────────── -->
+    <div class="field-section-title" style="margin-top:1.1rem">Backup</div>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="storage_backend">Storage backend</label>
+            <select id="storage_backend" name="storage_backend">
+                <option value="local" {% if cfg.storage_backend == "local" %}selected{% endif %}>
+                    local (host-mounted folder)
+                </option>
+                {# Add more options here when new backends are implemented: #}
+                {# <option value="s3">S3 / S3-compatible</option> #}
+                {# <option value="gcs">Google Cloud Storage</option> #}
+            </select>
+        </div>
+        <div class="field">
+            <label for="backup_dir">Backup dir <span style="font-weight:400;color:#a1a1aa">(local backend)</span></label>
+            <input id="backup_dir" name="backup_dir" type="text" value="{{ cfg.backup_dir }}" spellcheck="false"
+                   placeholder="/backups">
+        </div>
+    </div>
+
+    <!-- Docker ───────────────────────────────────────────────────────── -->
+    <div class="field-section-title" style="margin-top:1.1rem">Docker</div>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="docker_image">Image / tag</label>
+            <input id="docker_image" name="docker_image" type="text"
+                   value="{{ cfg.docker_image }}" spellcheck="false"
+                   placeholder="dfl:latest">
+        </div>
+    </div>
+
+    <!-- Stage arguments ──────────────────────────────────────────────── -->
+    <div class="field-section-title" style="margin-top:1.1rem">Stage arguments</div>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="extract_detector">Extract detector</label>
+            <select id="extract_detector" name="extract_detector">
+                <option value="s3fd"   {% if cfg.extract_detector == "s3fd"   %}selected{% endif %}>s3fd (auto, recommended)</option>
+                <option value="manual" {% if cfg.extract_detector == "manual" %}selected{% endif %}>manual (click each face)</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="train_model_name">Train / merge model name</label>
+            <input id="train_model_name" name="train_model_name" type="text"
+                   value="{{ cfg.train_model_name }}" spellcheck="false"
+                   placeholder="e.g. poc">
+        </div>
+        <div class="field">
+            <label for="merge_model_class">Merge model class</label>
+            <select id="merge_model_class" name="merge_model_class">
+                <option value="SAEHD"   {% if cfg.merge_model_class == "SAEHD"   %}selected{% endif %}>SAEHD (default)</option>
+                <option value="AMP"     {% if cfg.merge_model_class == "AMP"     %}selected{% endif %}>AMP</option>
+                <option value="Quick96" {% if cfg.merge_model_class == "Quick96" %}selected{% endif %}>Quick96</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="video_fps">Video FPS <span style="font-weight:400;color:#a1a1aa">(video-from-seq)</span></label>
+            <input id="video_fps" name="video_fps" type="number" min="1" max="120"
+                   value="{{ cfg.video_fps }}" style="width:6rem">
+        </div>
+    </div>
+
+    <div style="margin-top:1rem">
+        <button type="submit" class="btn-save">Save config</button>
+    </div>
+
+</form>

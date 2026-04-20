@@ -1,0 +1,50 @@
+<div id="history-panel"
+     hx-get="/history/partial"
+     hx-trigger="every 5s"
+     hx-target="this"
+     hx-swap="outerHTML">
+
+    {% if records %}
+    <table class="history-table">
+        <thead>
+            <tr>
+                <th>Summary</th>
+                <th>Duration</th>
+                <th>Finished</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in records %}
+            <tr class="history-row"
+                data-job-id="{{ r.job_id }}"
+                data-job="{{ r | tojson }}"
+                onclick="showJobDetail(this)"
+                title="Click for details">
+                <td>
+                    <span class="badge badge-{{ r.status }}">{{ r.status }}</span>
+                    {% if r.preset %}<span class="badge-preset" title="Preset: {{ r.preset }}">{{ r.preset }}</span>{% endif %}
+                    <span class="history-summary">{{ r.summary }}</span>
+                </td>
+                <td class="history-meta">
+                    {% if r.duration is not none %}
+                        {{ "%.0f"|format(r.duration) }}s
+                    {% else %}
+                        &mdash;
+                    {% endif %}
+                </td>
+                <td class="history-meta">
+                    {% if r.end_time %}
+                        {{ r.end_time | strftime }}
+                    {% else %}
+                        &mdash;
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="history-empty">No completed jobs yet.</p>
+    {% endif %}
+
+</div>

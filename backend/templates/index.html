@@ -1,0 +1,1678 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:0.5rem">
+    <div style="display:flex;align-items:baseline;gap:0.65rem">
+        <h1 style="margin-bottom:0">DFL Control Panel</h1>
+        {% if active_profile %}
+            {% set _pname = active_profile.name | lower %}
+            {% if _pname == 'local' %}
+                {% set _pbg = '#dcfce7' %}{% set _pfg = '#166534' %}
+            {% elif _pname == 'remote' %}
+                {% set _pbg = '#dbeafe' %}{% set _pfg = '#1e40af' %}
+            {% else %}
+                {% set _pbg = '#f0fdf4' %}{% set _pfg = '#15803d' %}
+            {% endif %}
+        <span id="profile-badge"
+              style="font-size:0.72rem;font-weight:700;padding:0.18rem 0.55rem;
+                     border-radius:999px;background:{{ _pbg }};color:{{ _pfg }};
+                     font-family:ui-monospace,monospace;letter-spacing:0.03em;
+                     white-space:nowrap;cursor:default"
+              title="Active environment profile">
+            &#x25CF; {{ active_profile.label or active_profile.name }}
+        </span>
+        {% else %}
+        <span id="profile-badge"
+              style="font-size:0.72rem;font-weight:600;padding:0.18rem 0.55rem;
+                     border-radius:999px;background:#f4f4f5;color:#a1a1aa;
+                     font-family:ui-monospace,monospace;letter-spacing:0.03em;
+                     white-space:nowrap;cursor:default"
+              title="No environment profile active">
+            &#x25CB; no profile
+        </span>
+        {% endif %}
+    </div>
+    {% if auth_enabled %}
+    <form method="post" action="/logout" style="margin:0">
+        <button type="submit" style="background:none;border:none;color:#71717a;font-size:0.78rem;cursor:pointer;padding:0;text-decoration:underline">Sign out</button>
+    </form>
+    {% endif %}
+</div>
+
+{% if not auth_enabled %}
+<div class="msg msg-warn" style="margin-bottom:1rem;font-size:0.82rem">
+    &#9888; Authentication is disabled (<code>DFL_AUTH_ENABLED</code> not set).
+    Do not expose port 8000 to the internet without enabling auth.
+</div>
+{% endif %}
+
+<!-- Status card: left-border color driven by data-status (set by JS on load/poll) -->
+<div class="card status-card" data-status="{{ status }}">
+    <div class="card-title">Status</div>
+    {% include "partials/state.html" %}
+</div>
+
+<!-- Actions card -->
+<div class="card">
+    <div class="card-title">Actions</div>
+    <div class="btn-row">
+        {% for stage in stages %}
+        <button class="btn-stage"
+                hx-post="/ui/run/{{ stage }}"
+                hx-target="#messages"
+                hx-swap="outerHTML"
+                hx-disabled-elt="this">
+            {{ stage | replace("-", " ") | title }}
+        </button>
+        {% endfor %}
+
+        <button class="btn-stop"
+                hx-post="/ui/stop"
+                hx-target="#messages"
+                hx-swap="outerHTML"
+                hx-disabled-elt="this"
+                hx-confirm="Stop the running job?">
+            Stop
+        </button>
+    </div>
+
+    <!-- Pretrained bootstrap indicator -->
+    <div style="margin-top:0.6rem;font-size:0.78rem">
+        {% if pretrained_available %}
+        <span style="color:#166534">&#x2713; Pretrained pack detected
+            {% if pretrained_label %}({{ pretrained_label }}){% endif %}
+            &mdash; bootstrap will run on first train</span>
+        {% else %}
+        <span style="color:#a1a1aa">&#x25CB; No pretrained pack at pretrained/SAEHD/ &mdash; train will cold-start</span>
+        {% endif %}
+    </div>
+
+    <!-- Message area — replaced by HTMX button responses -->
+    <div id="messages"></div>
+</div>
+
+<!-- Environment Profiles card — collapsible, closed by default -->
+<details class="card" id="profiles-card">
+    <summary>Environment Profiles</summary>
+    <div style="margin-top:0.85rem">
+
+        <!-- Active profile summary -->
+        <div style="font-size:0.82rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+            <span style="color:#52525b;font-weight:600">Active:</span>
+            <span id="profile-active-name"
+                  style="font-family:ui-monospace,monospace;color:#18181b">
+                {% if active_profile %}{{ active_profile.label or active_profile.name }}{% else %}None{% endif %}
+            </span>
+            {% if active_profile %}
+            <span style="font-size:0.75rem;color:#71717a;font-family:ui-monospace,monospace">
+                ({{ active_profile.workspace }})
+            </span>
+            {% endif %}
+        </div>
+
+        <!-- Profile list -->
+        <div class="field-section-title">Switch profile</div>
+        <div id="profile-list" style="margin-bottom:1rem">
+            <span style="color:#a1a1aa;font-size:0.82rem">Loading&hellip;</span>
+        </div>
+
+        <!-- Add / Edit profile form -->
+        <div class="field-section-title">Save current paths as profile</div>
+        <p style="font-size:0.82rem;color:#52525b;margin-bottom:0.65rem">
+            Captures dfl_root, workspace root, backup dir, and docker image.
+            All sub-paths (data_src, model_dir, etc.) are re-derived from workspace on apply.
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-bottom:0.45rem">
+            <input id="profile-name-input" type="text"
+                   placeholder="Profile name  (e.g. local, remote)"
+                   style="padding:0.38rem 0.55rem;border:1px solid #d4d4d8;border-radius:5px;font-size:0.82rem;font-family:ui-monospace,monospace"
+                   spellcheck="false">
+            <input id="profile-label-input" type="text"
+                   placeholder="Display label  (e.g. Cloud GPU VM)"
+                   style="padding:0.38rem 0.55rem;border:1px solid #d4d4d8;border-radius:5px;font-size:0.82rem;font-family:ui-monospace,monospace"
+                   spellcheck="false">
+        </div>
+        <div style="display:flex;gap:0.45rem;align-items:center;flex-wrap:wrap">
+            <button class="btn-save" onclick="saveProfileFromConfig()"
+                    style="white-space:nowrap;padding:0.45rem 0.85rem">Save as Profile</button>
+        </div>
+        <div style="font-size:0.75rem;color:#a1a1aa;margin-top:0.3rem">
+            Reads the currently committed config. Use the same name to overwrite an existing profile.
+        </div>
+
+        <div id="profile-messages" style="margin-top:0.75rem;font-size:0.85rem;min-height:1.2rem"></div>
+    </div>
+</details>
+
+<!-- Presets card — collapsible, closed by default -->
+<details class="card" id="presets-card">
+    <summary>Presets</summary>
+    <div style="margin-top:0.85rem">
+
+        <!-- Active preset + drift indicator -->
+        <div style="font-size:0.82rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+            <span style="color:#52525b;font-weight:600">Active:</span>
+            <span id="preset-active-name"
+                  style="font-family:ui-monospace,monospace;color:#18181b">None</span>
+            <span id="drift-badge" class="badge badge-warn"
+                  style="display:none" title="Current config differs from the active preset">differs</span>
+        </div>
+
+        <!-- Load / delete row -->
+        <div class="field-section-title">Load preset</div>
+        <div style="display:flex;gap:0.45rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap">
+            <select id="preset-select"
+                    style="flex:1;min-width:0;padding:0.38rem 0.55rem;border:1px solid #d4d4d8;border-radius:5px;font-size:0.82rem;font-family:ui-monospace,monospace;background:#fff">
+                <option value="">No presets saved</option>
+            </select>
+            <button class="btn-save" onclick="applyPreset()"
+                    style="white-space:nowrap;padding:0.45rem 0.85rem">Apply</button>
+            <button onclick="deletePreset()"
+                    style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:0.45rem 0.75rem;cursor:pointer;font-size:0.875rem;font-weight:500;white-space:nowrap">Delete</button>
+        </div>
+
+        <!-- Save as preset row -->
+        <div class="field-section-title">Save current config as preset</div>
+        <div style="display:flex;gap:0.45rem;align-items:center;flex-wrap:wrap">
+            <input id="preset-name-input" type="text"
+                   placeholder="Preset name  (e.g. project-alpha)"
+                   style="flex:1;min-width:0;padding:0.38rem 0.55rem;border:1px solid #d4d4d8;border-radius:5px;font-size:0.82rem;font-family:ui-monospace,monospace"
+                   spellcheck="false">
+            <button class="btn-save" onclick="saveAsPreset()"
+                    style="white-space:nowrap;padding:0.45rem 0.85rem">Save as Preset</button>
+        </div>
+        <div style="font-size:0.75rem;color:#a1a1aa;margin-top:0.3rem">
+            Saves the currently committed config.  Use the same name as an existing preset to update it.
+        </div>
+
+        <div id="preset-messages" style="margin-top:0.75rem;font-size:0.85rem;min-height:1.2rem"></div>
+    </div>
+</details>
+
+<!-- Export / Import card — collapsible, closed by default -->
+<details class="card" id="bundle-card">
+    <summary>Export / Import</summary>
+    <div style="margin-top:0.85rem">
+        {% include "partials/bundle.html" %}
+    </div>
+</details>
+
+<!-- Config card — collapsible, closed by default -->
+<details class="card">
+    <summary>Configuration</summary>
+    {% include "partials/config_form.html" %}
+</details>
+
+<!-- Backup card (existing: model + output) -->
+<div class="card">
+    <div class="card-title">Backup</div>
+    {% include "partials/backup.html" %}
+</div>
+
+<!-- Snapshots card — model + aligned faces; collapsible -->
+<details class="card" id="snapshots-card">
+    <summary>Data Snapshots</summary>
+    <div style="margin-top:0.85rem"
+         hx-get="/snapshots/partial"
+         hx-trigger="intersect once"
+         hx-target="this"
+         hx-swap="innerHTML">
+        <p class="history-empty">Loading&hellip;</p>
+    </div>
+</details>
+
+<!-- Files card — upload / browse / download -->
+<details class="card" id="files-card">
+    <summary>Files</summary>
+    <div style="margin-top:0.85rem">
+        {% include "partials/files.html" %}
+    </div>
+</details>
+
+<!-- Upload card — single file to /workspace/uploads -->
+<details class="card" id="upload-card">
+    <summary>Upload</summary>
+    <div style="margin-top:0.85rem">
+        <div style="font-size:0.78rem;color:#71717a;margin-bottom:0.65rem">
+            Videos, images, or .zip.
+            Allowed: <code style="font-family:ui-monospace,monospace">.mp4 .mov .avi .mkv .jpg .jpeg .png .zip</code>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.45rem">
+            <label for="upload-dest"
+                   style="font-size:0.8rem;font-weight:600;color:#52525b;white-space:nowrap">
+                Save to:
+            </label>
+            <select id="upload-dest"
+                    style="font-size:0.82rem;padding:0.3rem 0.5rem;border:1px solid #d4d4d8;
+                           border-radius:5px;background:#fff">
+                <option value="uploads">uploads (staging)</option>
+                <option value="data_src">data_src (source frames / images)</option>
+                <option value="data_dst">data_dst (destination video)</option>
+            </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.45rem">
+            <input type="checkbox" id="upload-extract-zip" style="cursor:pointer">
+            <label for="upload-extract-zip"
+                   style="font-size:0.8rem;color:#52525b;cursor:pointer">
+                Extract zip contents (images only, into selected folder)
+            </label>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+            <input type="file" id="upload-input" multiple
+                   accept=".mp4,.mov,.avi,.mkv,.jpg,.jpeg,.png,.zip"
+                   style="flex:1;min-width:0;font-size:0.82rem">
+            <button onclick="doUpload()"
+                    style="background:#2563eb;color:#fff;border:none;border-radius:6px;
+                           padding:0.38rem 0.75rem;cursor:pointer;font-size:0.82rem;
+                           font-weight:500;white-space:nowrap">
+                &#x2191; Upload
+            </button>
+        </div>
+        <div id="upload-result" style="margin-top:0.55rem;font-size:0.82rem;min-height:1.2rem"></div>
+    </div>
+</details>
+
+<!-- Uploaded Files card — list /workspace/uploads and route each file -->
+<details class="card" id="uploaded-files-card">
+    <summary>Uploaded Files</summary>
+    <div style="margin-top:0.85rem">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.65rem">
+            <button hx-get="/uploads/partial"
+                    hx-target="#uploads-list"
+                    hx-swap="innerHTML"
+                    style="font-size:0.78rem;padding:0.2rem 0.55rem;background:#f1f5f9;
+                           color:#52525b;border:1px solid #d4d4d8;border-radius:4px;cursor:pointer">
+                &#x21BB; Refresh
+            </button>
+            <span style="font-size:0.75rem;color:#71717a">Files staged in
+                <code style="font-family:ui-monospace,monospace">/workspace/uploads</code>
+            </span>
+        </div>
+        <div id="uploads-list"
+             hx-get="/uploads/partial"
+             hx-trigger="load, uploadsChanged from:body"
+             hx-swap="innerHTML"
+             style="font-size:0.82rem"></div>
+        <div id="uploads-msg" style="margin-top:0.55rem;font-size:0.82rem;min-height:1.2rem"></div>
+    </div>
+</details>
+
+<!-- History card — polls /history/partial every 5 s via HTMX -->
+<div class="card">
+    <div class="card-title">Job History</div>
+    {% include "partials/history.html" %}
+    <div id="history-detail" class="history-detail" style="display:none"></div>
+</div>
+
+<!-- Log pane -->
+<div class="card">
+    <div class="log-header">
+        <span class="card-title" style="margin-bottom:0">Logs</span>
+        <div class="log-header-right">
+            <button id="jump-latest" class="btn-jump" style="display:none"
+                    onclick="jumpToLatest()">&#x2193; Latest</button>
+            <span id="log-conn" class="conn-dot conn-off" title="SSE disconnected"></span>
+        </div>
+    </div>
+    <div id="log-pane"></div>
+</div>
+
+<footer>State refreshes every 3 s &nbsp;·&nbsp; JSON API at <a href="/docs">/docs</a></footer>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+(function () {
+    'use strict';
+
+    // ── Module state ──────────────────────────────────────────────────────────
+    var es            = null;   // active EventSource, or null
+    var pane          = null;   // cached #log-pane element
+    var MAX_LOG_LINES = 200;
+    var userScrolledUp = false; // true once user intentionally scrolls up
+    var _submitting    = false; // true while an action HTMX request is in-flight
+    var _lastReqPath   = '';    // path of last HTMX request (used in afterRequest)
+
+    function getPane() {
+        if (!pane) pane = document.getElementById('log-pane');
+        return pane;
+    }
+
+    // ── SSE connection dot ────────────────────────────────────────────────────
+
+    function setDot(on) {
+        var el = document.getElementById('log-conn');
+        if (!el) return;
+        el.className  = 'conn-dot ' + (on ? 'conn-on' : 'conn-off');
+        el.title      = on ? 'SSE connected' : 'SSE disconnected';
+    }
+
+    // ── Status card accent border ─────────────────────────────────────────────
+    // The .status-card outer div is not swapped by HTMX (only #state-panel inside
+    // it is). Mirror the data-status attribute outward so CSS border rules fire.
+
+    function syncStatusCard(status) {
+        var card = document.querySelector('.status-card');
+        if (card) card.setAttribute('data-status', status);
+    }
+
+    // ── Button state ──────────────────────────────────────────────────────────
+    // Run buttons: disabled while running.
+    // Stop button: disabled when not running.
+    // Skipped while _submitting to avoid races during in-flight requests.
+
+    function syncButtons(status) {
+        if (_submitting) return;
+        var running = (status === 'running');
+        document.querySelectorAll('.btn-stage').forEach(function (b) {
+            b.disabled = running;
+        });
+        var stopBtn = document.querySelector('.btn-stop');
+        if (stopBtn) stopBtn.disabled = !running;
+    }
+
+    // ── Message helper ────────────────────────────────────────────────────────
+    // Used for client-side errors (network failure) that the server cannot report.
+
+    function showMessage(text, kind) {
+        var el = document.getElementById('messages');
+        if (!el) return;
+        el.className   = 'msg msg-' + kind;
+        el.textContent = text;
+    }
+
+    // ── Log pane: scroll tracking and jump-to-latest ──────────────────────────
+
+    function onPaneScroll() {
+        var p = getPane();
+        if (!p) return;
+        // More than 60 px from the bottom = user intentionally scrolled up.
+        var atBottom = (p.scrollHeight - p.clientHeight - p.scrollTop) < 60;
+        userScrolledUp = !atBottom;
+        var btn = document.getElementById('jump-latest');
+        if (btn) btn.style.display = userScrolledUp ? '' : 'none';
+    }
+
+    function jumpToLatest() {
+        var p = getPane();
+        if (!p) return;
+        userScrolledUp = false;
+        p.scrollTop = p.scrollHeight;
+        var btn = document.getElementById('jump-latest');
+        if (btn) btn.style.display = 'none';
+    }
+
+    // ── Log line append ───────────────────────────────────────────────────────
+
+    function appendLine(text) {
+        var p = getPane();
+        if (!p) return;
+        var span = document.createElement('span');
+        span.className   = 'log-line';
+        span.textContent = text;
+        p.appendChild(span);
+        // Keep DOM bounded at MAX_LOG_LINES.
+        while (p.children.length > MAX_LOG_LINES) p.removeChild(p.firstChild);
+        // Only auto-scroll when the user has not scrolled up intentionally.
+        if (!userScrolledUp) p.scrollTop = p.scrollHeight;
+    }
+
+    // ── EventSource management ────────────────────────────────────────────────
+
+    function connectLogs() {
+        if (es) { es.close(); es = null; }
+        setDot(false);
+        es = new EventSource('/logs/stream');
+
+        es.onopen = function () {
+            // Clear pane on fresh connect so buffered history doesn't duplicate.
+            var p = getPane();
+            if (p) p.textContent = '';
+            // Reset scroll state: fresh connect means fresh content.
+            userScrolledUp = false;
+            var btn = document.getElementById('jump-latest');
+            if (btn) btn.style.display = 'none';
+            setDot(true);
+        };
+
+        es.onmessage = function (e) {
+            appendLine(e.data);
+        };
+
+        // Named "close" event: stage finished cleanly. Don't reconnect —
+        // pane stays stable until the next run starts.
+        es.addEventListener('close', function () {
+            setDot(false);
+            if (es) { es.close(); es = null; }
+        });
+
+        // Network drop: EventSource auto-retries. onopen will fire again
+        // on reconnect, clears the pane, and reloads buffered history.
+        es.onerror = function () {
+            setDot(false);
+            // Do not null es — let EventSource manage its own retry timer.
+        };
+    }
+
+    // ── HTMX request lifecycle ────────────────────────────────────────────────
+
+    document.addEventListener('htmx:beforeRequest', function (e) {
+        var cfg  = e.detail && e.detail.requestConfig;
+        var path = (cfg && cfg.path) || '';
+        _lastReqPath = path;
+
+        var isAction = (path.indexOf('/ui/run/') === 0 || path === '/ui/stop');
+        if (!isAction) return;
+
+        // Block concurrent action requests — user cannot fire two at once.
+        if (_submitting) {
+            e.preventDefault();
+            return;
+        }
+
+        _submitting = true;
+
+        // Immediately disable all controls for the duration of the request.
+        document.querySelectorAll('.btn-stage, .btn-stop').forEach(function (b) {
+            b.disabled = true;
+        });
+
+        // For run requests, connect to the log stream optimistically so
+        // lines appear as soon as the subprocess starts writing.
+        if (path.indexOf('/ui/run/') === 0) {
+            connectLogs();
+        }
+    });
+
+    document.addEventListener('htmx:afterRequest', function (e) {
+        var cfg  = e.detail && e.detail.requestConfig;
+        var path = (cfg && cfg.path) || '';
+        var isAction = (path.indexOf('/ui/run/') === 0 || path === '/ui/stop');
+        if (!isAction) return;
+
+        _submitting = false;
+
+        // Successful run: keep buttons disabled and let the next state poll
+        // (within 3 s) confirm the process is running.  This avoids the
+        // race where the subprocess is starting but status is still "idle".
+        if (path.indexOf('/ui/run/') === 0 && e.detail.successful) return;
+
+        // Failed run or any stop request: re-sync from current state-panel.
+        var panel = document.getElementById('state-panel');
+        var status = panel && panel.dataset.status;
+        if (status) syncButtons(status);
+    });
+
+    // Server returned 4xx / 5xx — the HTMX response partial handles most cases,
+    // but clear _submitting here as a safety net.
+    document.addEventListener('htmx:responseError', function () {
+        _submitting = false;
+        var panel = document.getElementById('state-panel');
+        var status = panel && panel.dataset.status;
+        if (status) syncButtons(status);
+    });
+
+    // Network failure — server message partial never arrives; show inline error.
+    document.addEventListener('htmx:sendError', function () {
+        _submitting = false;
+        showMessage('Request failed — could not reach the server.', 'error');
+        var panel = document.getElementById('state-panel');
+        var status = panel && panel.dataset.status;
+        if (status) syncButtons(status);
+    });
+
+    // ── State poll swap ───────────────────────────────────────────────────────
+    // Fired every 3 s when HTMX replaces #state-panel with fresh content.
+
+    document.addEventListener('htmx:afterSwap', function (e) {
+        var target = e.detail && e.detail.target;
+        if (!target || target.id !== 'state-panel') return;
+        var status = target.dataset.status;
+        syncStatusCard(status);
+        syncButtons(status);
+        if (status === 'running' && !es) connectLogs();
+    });
+
+    // ── Page load ─────────────────────────────────────────────────────────────
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var panel  = document.getElementById('state-panel');
+        var status = panel && panel.dataset.status;
+
+        if (status) {
+            syncStatusCard(status);
+            syncButtons(status);
+        }
+
+        // Connect to the log stream if a job is already running when the page loads.
+        if (status === 'running') connectLogs();
+
+        // Track scroll intent on the log pane.
+        var p = getPane();
+        if (p) p.addEventListener('scroll', onPaneScroll, { passive: true });
+    });
+
+    // Expose jumpToLatest for the inline onclick on #jump-latest.
+    window.jumpToLatest = jumpToLatest;
+
+    // ── Files ─────────────────────────────────────────────────────────────────
+
+    var _filesRoots   = {};    // key → root metadata from /files/roots
+    var _currentRoot  = null;
+    var _currentPath  = '';    // rel_path within root
+
+    function loadRoots() {
+        fetch('/files/roots')
+            .then(function (r) { return r.json(); })
+            .then(function (roots) {
+                _filesRoots = roots;
+                var sel = document.getElementById('files-root-select');
+                if (!sel) return;
+                var keys = Object.keys(roots).sort(function (a, b) {
+                    // Upload-capable roots first, then alphabetical.
+                    var ua = roots[a].upload_ok ? 0 : 1;
+                    var ub = roots[b].upload_ok ? 0 : 1;
+                    return ua - ub || a.localeCompare(b);
+                });
+                sel.innerHTML = '<option value="">-- select location --</option>'
+                    + keys.map(function (k) {
+                        var info = roots[k];
+                        var tag  = info.upload_ok ? ' \u2191' : '';
+                        return '<option value="' + _esc(k) + '">'
+                            + _esc(info.label) + tag + '</option>';
+                    }).join('');
+            })
+            .catch(function () {});
+    }
+
+    function onFilesRootChange() {
+        var sel = document.getElementById('files-root-select');
+        var key = sel && sel.value;
+        if (!key) {
+            _currentRoot = null;
+            _currentPath = '';
+            _renderListing(null);
+            return;
+        }
+        _currentRoot = key;
+        _currentPath = '';
+        loadListing(key, '');
+    }
+
+    function loadListing(root, path) {
+        _currentRoot = root;
+        _currentPath = path || '';
+        var listEl = document.getElementById('files-listing');
+        if (listEl) listEl.innerHTML = '<span style="color:#a1a1aa">Loading\u2026</span>';
+        fetch('/files/list?root=' + encodeURIComponent(root)
+                          + '&path=' + encodeURIComponent(path || ''))
+            .then(function (r) { return r.json(); })
+            .then(function (data) { _renderListing(data); })
+            .catch(function () {
+                var el = document.getElementById('files-listing');
+                if (el) el.innerHTML = '<span style="color:#991b1b">Failed to load listing.</span>';
+            });
+    }
+
+    function refreshListing() {
+        if (_currentRoot) loadListing(_currentRoot, _currentPath);
+    }
+
+    function _renderListing(data) {
+        var listEl   = document.getElementById('files-listing');
+        var countEl  = document.getElementById('files-count');
+        var crumbEl  = document.getElementById('files-breadcrumb');
+        var upArea   = document.getElementById('files-upload-area');
+        var zipBtn   = document.getElementById('files-zip-btn');
+        var pathEl   = document.getElementById('files-root-path');
+        if (!listEl) return;
+
+        if (!data) {
+            listEl.innerHTML = '<span style="color:#a1a1aa">Select a location above to browse files.</span>';
+            if (countEl) countEl.textContent = '';
+            if (crumbEl) crumbEl.innerHTML   = '';
+            if (upArea)  upArea.style.display = 'none';
+            if (zipBtn)  zipBtn.style.display = 'none';
+            if (pathEl)  pathEl.textContent   = '';
+            return;
+        }
+
+        var rootInfo = _filesRoots[data.root] || {};
+        if (pathEl)  pathEl.textContent  = rootInfo.path || '';
+        if (upArea)  upArea.style.display  = rootInfo.upload_ok ? '' : 'none';
+        if (zipBtn)  zipBtn.style.display  = rootInfo.zip_ok    ? '' : 'none';
+        if (crumbEl) crumbEl.innerHTML     = _renderBreadcrumb(data.root, data.path);
+
+        var capNote = data.capped ? ' (capped at 500)' : '';
+        if (countEl) countEl.textContent = data.entries.length + ' item(s)' + capNote;
+
+        if (!data.entries.length) {
+            listEl.innerHTML = '<span style="color:#a1a1aa;font-style:italic">Empty directory.</span>';
+            return;
+        }
+
+        var rows = data.entries.map(function (e) {
+            var icon = e.type === 'dir' ? '&#x1F4C1;' : '&#x1F4C4;';
+            var nameCell;
+            if (e.type === 'dir') {
+                var rArg = JSON.stringify(data.root);
+                var pArg = JSON.stringify(e.rel_path);
+                nameCell = '<a href="javascript:void(0)" onclick="loadListing(' + rArg + ',' + pArg + ')" '
+                         + 'style="color:#2563eb;text-decoration:none;font-weight:500">'
+                         + icon + '&nbsp;' + _esc(e.name) + '/</a>';
+            } else {
+                nameCell = icon + '&nbsp;' + _esc(e.name);
+            }
+            var size  = (e.size !== null && e.size !== undefined) ? _fmtSize(e.size) : '&mdash;';
+            var mtime = e.mtime
+                ? new Date(e.mtime * 1000).toLocaleString(undefined, {
+                    year: '2-digit', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit'
+                  })
+                : '&mdash;';
+            var dlBtn = (e.type === 'file')
+                ? '<a href="/files/download?root=' + encodeURIComponent(data.root)
+                  + '&path=' + encodeURIComponent(e.rel_path)
+                  + '" download="' + _esc(e.name) + '" '
+                  + 'style="font-size:0.72rem;padding:0.15rem 0.45rem;background:#f1f5f9;'
+                  + 'color:#2563eb;border:1px solid #d4d4d8;border-radius:4px;'
+                  + 'text-decoration:none;font-weight:500;white-space:nowrap">'
+                  + '&#x21E9;</a>'
+                : '';
+            return '<tr style="border-top:1px solid #f4f4f5">'
+                + '<td style="padding:0.28rem 0.4rem 0.28rem 0;max-width:22rem;overflow:hidden;'
+                + 'text-overflow:ellipsis;white-space:nowrap">' + nameCell + '</td>'
+                + '<td style="padding:0.28rem 0.5rem;color:#71717a;white-space:nowrap;'
+                + 'text-align:right;min-width:5rem">' + size + '</td>'
+                + '<td style="padding:0.28rem 0.5rem;color:#71717a;font-size:0.75rem;'
+                + 'white-space:nowrap">' + mtime + '</td>'
+                + '<td style="padding:0.28rem 0 0.28rem 0.4rem;text-align:right;'
+                + 'white-space:nowrap">' + dlBtn + '</td>'
+                + '</tr>';
+        }).join('');
+
+        listEl.innerHTML =
+            '<table style="width:100%;border-collapse:collapse;'
+            + 'font-family:ui-monospace,monospace">'
+            + '<thead><tr style="font-size:0.72rem;color:#a1a1aa;'
+            + 'border-bottom:1px solid #e4e4e7">'
+            + '<th style="text-align:left;padding-bottom:0.2rem;font-weight:500">Name</th>'
+            + '<th style="text-align:right;padding-bottom:0.2rem;font-weight:500;'
+            + 'min-width:5rem">Size</th>'
+            + '<th style="text-align:left;padding:0 0.5rem 0.2rem;font-weight:500">Modified</th>'
+            + '<th></th>'
+            + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+
+    function _renderBreadcrumb(root, path) {
+        var rootInfo = _filesRoots[root] || {};
+        var rootLabel = rootInfo.label || root;
+        var parts    = (path || '').replace(/\\/g, '/').split('/').filter(Boolean);
+        var html = '<span onclick="loadListing(' + JSON.stringify(root) + ',\'\')" '
+                 + 'style="cursor:pointer;color:#2563eb">' + _esc(rootLabel) + '</span>';
+        var cumPath = '';
+        parts.forEach(function (p, i) {
+            cumPath = cumPath ? cumPath + '/' + p : p;
+            var snap = cumPath;
+            html += ' <span style="color:#a1a1aa">/</span> ';
+            if (i < parts.length - 1) {
+                html += '<span onclick="loadListing(' + JSON.stringify(root) + ','
+                      + JSON.stringify(snap) + ')" style="cursor:pointer;color:#2563eb">'
+                      + _esc(p) + '</span>';
+            } else {
+                html += '<span style="color:#18181b">' + _esc(p) + '</span>';
+            }
+        });
+        return html;
+    }
+
+    function uploadFiles() {
+        if (!_currentRoot) { showFilesMsg('Select a location first.', 'warn'); return; }
+        var input = document.getElementById('files-upload-input');
+        if (!input || !input.files.length) { showFilesMsg('Select files first.', 'warn'); return; }
+
+        var btn = document.getElementById('files-upload-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Uploading\u2026'; }
+        showFilesMsg('', 'ok');
+
+        var fd = new FormData();
+        Array.from(input.files).forEach(function (f) { fd.append('files', f); });
+
+        var url = '/files/upload?root=' + encodeURIComponent(_currentRoot)
+                + '&path=' + encodeURIComponent(_currentPath);
+
+        fetch(url, { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    showFilesMsg(
+                        'Uploaded ' + data.count + ' file(s): ' + (data.uploaded || []).join(', '),
+                        'ok'
+                    );
+                    if (input) input.value = '';
+                    refreshListing();
+                } else {
+                    var err = (data.detail) || (data.errors || []).join('; ') || 'Unknown error';
+                    showFilesMsg('Upload failed: ' + err, 'error');
+                }
+            })
+            .catch(function () {
+                showFilesMsg('Upload failed \u2014 could not reach server.', 'error');
+            })
+            .finally(function () {
+                if (btn) { btn.disabled = false; btn.textContent = '\u2191 Upload'; }
+            });
+    }
+
+    function zipCurrentDir() {
+        if (!_currentRoot) return;
+        var info      = _filesRoots[_currentRoot] || {};
+        var pathLabel = _currentPath || info.label || _currentRoot;
+        if (!confirm('Download "' + pathLabel + '" as a ZIP?\n\n'
+                + 'Limit: 1\u202F000 files / 2\u202FGB uncompressed.\n'
+                + 'The server will check before creating the archive.')) return;
+
+        showFilesMsg('Preparing ZIP on server\u2026', 'ok');
+
+        var url = '/files/zip?root=' + encodeURIComponent(_currentRoot)
+                + '&path=' + encodeURIComponent(_currentPath);
+
+        fetch(url)
+            .then(function (r) {
+                if (!r.ok) {
+                    return r.json().then(function (d) {
+                        showFilesMsg('ZIP failed: ' + (d.detail || 'server error'), 'error');
+                    });
+                }
+                return r.blob().then(function (blob) {
+                    // Extract filename from Content-Disposition header if present.
+                    var cd    = r.headers.get('content-disposition') || '';
+                    var match = cd.match(/filename[^;=\n]*=(["']?)([^"';\n]+)\1/);
+                    var fname = match ? match[2] : (_currentRoot + '.zip');
+                    var burl  = URL.createObjectURL(blob);
+                    var a     = document.createElement('a');
+                    a.href     = burl;
+                    a.download = fname;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(burl);
+                    showFilesMsg('ZIP download started: ' + fname, 'ok');
+                });
+            })
+            .catch(function () {
+                showFilesMsg('ZIP failed \u2014 could not reach server.', 'error');
+            });
+    }
+
+    function showFilesMsg(text, kind) {
+        var el = document.getElementById('files-messages');
+        if (!el) return;
+        el.className   = text ? 'msg msg-' + kind : '';
+        el.textContent = text;
+    }
+
+    function _fmtSize(bytes) {
+        if (bytes === null || bytes === undefined) return '';
+        if (bytes < 1024)             return bytes + '\u00A0B';
+        if (bytes < 1048576)          return (bytes / 1024).toFixed(1) + '\u00A0KB';
+        if (bytes < 1073741824)       return (bytes / 1048576).toFixed(1) + '\u00A0MB';
+        return (bytes / 1073741824).toFixed(2) + '\u00A0GB';
+    }
+
+    window.onFilesRootChange = onFilesRootChange;
+    window.loadListing       = loadListing;
+    window.refreshListing    = refreshListing;
+    window.uploadFiles       = uploadFiles;
+    window.zipCurrentDir     = zipCurrentDir;
+
+    // ── Upload ────────────────────────────────────────────────────────────────
+
+    function doUpload() {
+        var input      = document.getElementById('upload-input');
+        var destEl     = document.getElementById('upload-dest');
+        var extractEl  = document.getElementById('upload-extract-zip');
+        var result     = document.getElementById('upload-result');
+        var dest       = destEl ? destEl.value : 'uploads';
+        var extractZip = extractEl && extractEl.checked;
+
+        if (!input || !input.files.length) {
+            result.innerHTML = '<span class="msg msg-warn">Select one or more files first.</span>';
+            return;
+        }
+
+        var form = new FormData();
+        form.append('dest', dest);
+        form.append('extract_zip', extractZip ? 'true' : 'false');
+        for (var i = 0; i < input.files.length; i++) {
+            form.append('files', input.files[i]);
+        }
+
+        var n = input.files.length;
+        result.innerHTML = '<span style="color:#71717a">Uploading ' + n
+            + (n === 1 ? ' file' : ' files') + '\u2026</span>';
+
+        fetch('/upload', { method: 'POST', body: form })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var html = '';
+                if (d.ok && d.files && d.files.length) {
+                    var lines = d.files.map(function (f) {
+                        var mb = (f.size / 1048576).toFixed(1);
+                        return _esc(f.filename) + ' \u2192 '
+                            + _esc(f.saved_path) + '\u00A0(' + mb + '\u00A0MB)';
+                    });
+                    html += '<div class="msg msg-ok">' + lines.join('<br>') + '</div>';
+                }
+                if (d.ok && d.extracted_files && d.extracted_files.length) {
+                    var exLines = d.extracted_files.map(function (f) {
+                        var mb = (f.size / 1048576).toFixed(1);
+                        return _esc(f.filename) + ' \u2192 '
+                            + _esc(f.saved_path) + '\u00A0(' + mb + '\u00A0MB)';
+                    });
+                    html += '<div class="msg msg-ok" style="margin-top:0.3rem">'
+                        + 'Extracted ' + d.extracted_files.length + ' image'
+                        + (d.extracted_files.length === 1 ? '' : 's') + ':<br>'
+                        + exLines.join('<br>') + '</div>';
+                }
+                if (d.notes && d.notes.length) {
+                    html += '<div class="msg msg-warn" style="margin-top:0.3rem">'
+                        + d.notes.map(_esc).join('<br>') + '</div>';
+                }
+                if (d.errors && d.errors.length) {
+                    html += '<div class="msg msg-error" style="margin-top:0.3rem">'
+                        + d.errors.map(_esc).join('<br>') + '</div>';
+                }
+                if (!html) {
+                    html = '<span class="msg msg-error">'
+                        + _esc(d.detail || 'Upload failed.') + '</span>';
+                }
+                result.innerHTML = html;
+                if (d.ok) {
+                    input.value = '';
+                    if (dest === 'uploads') {
+                        htmx.trigger(document.body, 'uploadsChanged');
+                    }
+                }
+            })
+            .catch(function () {
+                result.innerHTML = '<span class="msg msg-error">Upload failed \u2014 could not reach server.</span>';
+            });
+    }
+
+    window.doUpload = doUpload;
+
+    // ── Uploaded Files ────────────────────────────────────────────────────────
+    // The list in #uploads-list is HTMX-managed: it loads on page load and
+    // refreshes whenever the custom 'uploadsChanged' event fires on document.body.
+    // doUpload() and moveUpload() fire that event after a successful operation.
+
+    function moveUpload(filename) {
+        var sel    = document.getElementById('bucket-' + filename);
+        var bucket = sel ? sel.value : 'data_src';
+        var msgEl  = document.getElementById('uploads-msg');
+        if (msgEl) msgEl.innerHTML = '<span style="color:#71717a">Moving\u2026</span>';
+        fetch('/uploads/move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: filename, bucket: bucket }),
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.ok) {
+                    if (msgEl) msgEl.innerHTML = '<span class="msg msg-ok">Moved to '
+                        + _esc(d.saved_path) + '</span>';
+                    htmx.trigger(document.body, 'uploadsChanged');
+                } else {
+                    if (msgEl) msgEl.innerHTML = '<span class="msg msg-error">'
+                        + _esc(d.detail || 'Move failed.') + '</span>';
+                }
+            })
+            .catch(function () {
+                if (msgEl) msgEl.innerHTML = '<span class="msg msg-error">Move failed \u2014 could not reach server.</span>';
+            });
+    }
+
+    window.moveUpload = moveUpload;
+
+    // ── Profiles ──────────────────────────────────────────────────────────────
+
+    var _profiles      = {};   // name → profile object
+    var _activeProfile = null; // name of active profile
+
+    function loadProfiles() {
+        fetch('/profiles')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                _profiles      = {};
+                _activeProfile = data.active || null;
+                (data.profiles || []).forEach(function (p) { _profiles[p.name] = p; });
+                renderProfileList();
+            })
+            .catch(function () {});
+    }
+
+    function renderProfileList() {
+        var container = document.getElementById('profile-list');
+        if (!container) return;
+        var names = Object.keys(_profiles).sort(function (a, b) {
+            return a.toLowerCase().localeCompare(b.toLowerCase());
+        });
+        if (names.length === 0) {
+            container.innerHTML = '<span style="color:#a1a1aa;font-size:0.82rem">No profiles saved. Use the form below to create one.</span>';
+            return;
+        }
+        var rows = names.map(function (n) {
+            var p       = _profiles[n];
+            var isActive = (n === _activeProfile);
+            var badge = isActive
+                ? '<span class="badge badge-ok" style="font-size:0.65rem">active</span>'
+                : '';
+            var ws    = p.workspace || '';
+            var label = p.label ? p.label : n;
+            return '<div style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0;'
+                + 'border-bottom:1px solid #f4f4f5;flex-wrap:wrap">'
+                + '<span style="font-family:ui-monospace,monospace;font-size:0.82rem;font-weight:600;min-width:6rem">'
+                + _esc(label) + '</span>'
+                + badge
+                + '<span style="font-size:0.75rem;color:#71717a;font-family:ui-monospace,monospace;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+                + _esc(ws) + '</span>'
+                + '<button onclick="applyProfile(' + JSON.stringify(n) + ')"'
+                + (isActive ? ' disabled title="Already active"' : '')
+                + ' style="font-size:0.72rem;padding:0.18rem 0.5rem;background:#f1f5f9;color:#52525b;'
+                + 'border:1px solid #d4d4d8;border-radius:4px;cursor:pointer;font-weight:500;white-space:nowrap">'
+                + 'Apply</button>'
+                + '<button onclick="deleteProfile(' + JSON.stringify(n) + ')"'
+                + (isActive ? ' disabled title="Cannot delete active profile"' : '')
+                + ' style="font-size:0.72rem;padding:0.18rem 0.5rem;background:#fee2e2;color:#991b1b;'
+                + 'border:1px solid #fca5a5;border-radius:4px;cursor:pointer;font-weight:500;white-space:nowrap">'
+                + 'Delete</button>'
+                + '</div>';
+        });
+        container.innerHTML = rows.join('');
+    }
+
+    function applyProfile(name) {
+        var p = _profiles[name];
+        if (!p) return;
+        var label = p.label ? '"' + p.label + '"' : '"' + name + '"';
+        var msg = 'Switch to profile ' + label + '?\n\n'
+                + 'Workspace: ' + (p.workspace || '?') + '\n'
+                + 'DFL root:  ' + (p.dfl_root || '?') + '\n\n'
+                + 'This will update all workspace paths and the docker image.\n'
+                + 'A job must NOT be running. Proceed?';
+        if (!confirm(msg)) return;
+
+        showProfileMsg('Switching to ' + name + '\u2026', 'ok');
+
+        fetch('/profiles/' + encodeURIComponent(name) + '/apply', { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    showProfileMsg('Profile "' + name + '" applied \u2014 reloading\u2026', 'ok');
+                    setTimeout(function () { window.location.reload(); }, 900);
+                } else {
+                    showProfileMsg(
+                        'Apply failed: ' + (data.errors || ['unknown error']).join('; '),
+                        'error'
+                    );
+                }
+            })
+            .catch(function () {
+                showProfileMsg('Apply failed \u2014 could not reach server.', 'error');
+            });
+    }
+
+    function saveProfileFromConfig() {
+        var nameEl  = document.getElementById('profile-name-input');
+        var labelEl = document.getElementById('profile-label-input');
+        var name    = nameEl  && nameEl.value.trim();
+        var label   = labelEl && labelEl.value.trim();
+        if (!name) { showProfileMsg('Enter a profile name first.', 'warn'); return; }
+
+        fetch('/config')
+            .then(function (r) { return r.json(); })
+            .then(function (cfg) {
+                var body = {
+                    name:         name,
+                    label:        label || '',
+                    dfl_root:     cfg.dfl_root     || '',
+                    workspace:    cfg.workspace     || '',
+                    backup_dir:   cfg.backup_dir    || '',
+                    docker_image: cfg.docker_image  || 'dfl:latest',
+                };
+                return fetch('/profiles', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify(body),
+                });
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    showProfileMsg('Profile "' + name + '" saved.', 'ok');
+                    if (nameEl)  nameEl.value  = '';
+                    if (labelEl) labelEl.value = '';
+                    loadProfiles();
+                } else {
+                    showProfileMsg(
+                        'Save failed: ' + (data.errors || ['unknown error']).join('; '),
+                        'error'
+                    );
+                }
+            })
+            .catch(function () {
+                showProfileMsg('Save failed \u2014 could not reach server.', 'error');
+            });
+    }
+
+    function deleteProfile(name) {
+        if (!confirm('Delete profile "' + name + '"?\nThis cannot be undone.')) return;
+        fetch('/profiles/' + encodeURIComponent(name), { method: 'DELETE' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    showProfileMsg('Profile "' + name + '" deleted.', 'ok');
+                    loadProfiles();
+                } else {
+                    showProfileMsg(
+                        (data.errors || ['Delete failed.']).join('; '),
+                        'error'
+                    );
+                }
+            })
+            .catch(function () {
+                showProfileMsg('Delete failed \u2014 could not reach server.', 'error');
+            });
+    }
+
+    function showProfileMsg(text, kind) {
+        var el = document.getElementById('profile-messages');
+        if (!el) return;
+        el.className   = 'msg msg-' + kind;
+        el.textContent = text;
+    }
+
+    window.applyProfile         = applyProfile;
+    window.saveProfileFromConfig = saveProfileFromConfig;
+    window.deleteProfile        = deleteProfile;
+
+    // ── Presets ───────────────────────────────────────────────────────────────
+
+    // Config fields that a preset captures — must stay in sync with
+    // PRESET_FIELDS in preset_manager.py.
+    var PRESET_FIELDS = [
+        'workspace', 'model_dir',
+        'data_src', 'data_src_aligned',
+        'data_dst', 'data_dst_aligned',
+        'output_dir', 'output_mask_dir',
+        'docker_image', 'train_model_name', 'merge_model_class',
+    ];
+
+    var _presets      = {};    // name → preset object
+    var _activePreset = null;  // name of last applied preset
+
+    function loadPresets() {
+        fetch('/presets')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                _presets = {};
+                (data.presets || []).forEach(function (p) { _presets[p.name] = p; });
+                _activePreset = data.active || null;
+                renderPresets();
+                checkDrift();
+            })
+            .catch(function () { /* presets are optional — silent fail on load */ });
+    }
+
+    function renderPresets() {
+        var sel = document.getElementById('preset-select');
+        if (!sel) return;
+        var names = Object.keys(_presets).sort(function (a, b) {
+            return a.toLowerCase().localeCompare(b.toLowerCase());
+        });
+        if (names.length === 0) {
+            sel.innerHTML = '<option value="">No presets saved</option>';
+        } else {
+            sel.innerHTML = '<option value="">-- select --</option>'
+                + names.map(function (n) {
+                    return '<option value="' + _esc(n) + '">' + _esc(n) + '</option>';
+                }).join('');
+            if (_activePreset && _presets[_activePreset]) sel.value = _activePreset;
+        }
+        var activeEl = document.getElementById('preset-active-name');
+        if (activeEl) activeEl.textContent = _activePreset || 'None';
+    }
+
+    function checkDrift() {
+        if (!_activePreset || !_presets[_activePreset]) {
+            var badge = document.getElementById('drift-badge');
+            if (badge) badge.style.display = 'none';
+            return;
+        }
+        fetch('/config')
+            .then(function (r) { return r.json(); })
+            .then(function (cfg) {
+                var preset  = _presets[_activePreset];
+                var differs = PRESET_FIELDS.some(function (f) {
+                    return (preset[f] || '') !== (cfg[f] || '');
+                });
+                var badge = document.getElementById('drift-badge');
+                if (badge) badge.style.display = differs ? '' : 'none';
+            })
+            .catch(function () {});
+    }
+
+    function applyPreset() {
+        var sel  = document.getElementById('preset-select');
+        var name = sel && sel.value;
+        if (!name) { showPresetMsg('Select a preset first.', 'warn'); return; }
+
+        fetch('/presets/' + encodeURIComponent(name) + '/apply', { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    showPresetMsg('Preset "' + name + '" applied — reloading\u2026', 'ok');
+                    setTimeout(function () { window.location.reload(); }, 900);
+                } else {
+                    showPresetMsg(
+                        'Apply failed: ' + (data.errors || ['unknown error']).join('; '),
+                        'error'
+                    );
+                }
+            })
+            .catch(function () {
+                showPresetMsg('Apply failed — could not reach server.', 'error');
+            });
+    }
+
+    function saveAsPreset() {
+        var nameEl = document.getElementById('preset-name-input');
+        var name   = nameEl && nameEl.value.trim();
+        if (!name) { showPresetMsg('Enter a preset name first.', 'warn'); return; }
+
+        // Always save the committed config (not DOM form values which may be unsaved).
+        fetch('/config')
+            .then(function (r) { return r.json(); })
+            .then(function (cfg) {
+                var body = { name: name };
+                PRESET_FIELDS.forEach(function (f) { body[f] = cfg[f] || ''; });
+                return fetch('/presets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    showPresetMsg('Preset "' + name + '" saved.', 'ok');
+                    if (nameEl) nameEl.value = '';
+                    loadPresets();
+                } else {
+                    showPresetMsg(
+                        'Save failed: ' + (data.errors || ['unknown error']).join('; '),
+                        'error'
+                    );
+                }
+            })
+            .catch(function () {
+                showPresetMsg('Save failed — could not reach server.', 'error');
+            });
+    }
+
+    function deletePreset() {
+        var sel  = document.getElementById('preset-select');
+        var name = sel && sel.value;
+        if (!name) { showPresetMsg('Select a preset to delete.', 'warn'); return; }
+        if (!confirm('Delete preset "' + name + '"?\nThis cannot be undone.')) return;
+
+        fetch('/presets/' + encodeURIComponent(name), { method: 'DELETE' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    showPresetMsg('Preset "' + name + '" deleted.', 'ok');
+                    loadPresets();
+                } else {
+                    showPresetMsg(
+                        (data.errors || ['Delete failed.']).join('; '),
+                        'error'
+                    );
+                }
+            })
+            .catch(function () {
+                showPresetMsg('Delete failed — could not reach server.', 'error');
+            });
+    }
+
+    function showPresetMsg(text, kind) {
+        var el = document.getElementById('preset-messages');
+        if (!el) return;
+        el.className   = 'msg msg-' + kind;
+        el.textContent = text;
+    }
+
+    // ── Path validation ───────────────────────────────────────────────────────
+
+    var PATH_FIELDS = [
+        'dfl_root', 'workspace',
+        'data_src', 'data_src_aligned',
+        'data_dst', 'data_dst_aligned',
+        'model_dir', 'output_dir', 'output_mask_dir',
+    ];
+
+    function checkPaths() {
+        var form = document.getElementById('config-form');
+        if (!form) return;
+
+        var btn = document.getElementById('check-paths-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Checking\u2026'; }
+
+        var paths = {};
+        PATH_FIELDS.forEach(function (f) {
+            var el = form.elements[f];
+            if (el) paths[f] = el.value;
+        });
+
+        fetch('/paths/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(paths),
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (results) { renderPathResults(results); })
+            .catch(function () {
+                var c = document.getElementById('path-check-results');
+                if (c) c.textContent = 'Path check failed — could not reach server.';
+            })
+            .finally(function () {
+                if (btn) { btn.disabled = false; btn.textContent = '\u2713 Check paths'; }
+            });
+    }
+
+    function renderPathResults(results) {
+        var container = document.getElementById('path-check-results');
+        if (!container) return;
+        var lines = Object.keys(results).map(function (f) {
+            var status = results[f];
+            var ok     = status === 'ok';
+            var icon   = ok ? '\u2713' : '\u2717';
+            var color  = ok ? '#166534' : (status === 'empty' ? '#854d0e' : '#991b1b');
+            var label  = status === 'ok' ? 'exists' : status.replace('_', ' ');
+            return '<span style="color:' + color + ';margin-right:1rem;white-space:nowrap">'
+                 + icon + ' ' + _esc(f) + ': ' + label + '</span>';
+        });
+        container.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:0.1rem 0">'
+                            + lines.join('') + '</div>';
+    }
+
+    // ── Job history detail panel ──────────────────────────────────────────────
+
+    var _selectedJobId  = null;
+    var _selectedJobRaw = null;  // last-rendered job object (for refresh)
+
+    function showJobDetail(rowEl) {
+        var raw = rowEl && rowEl.getAttribute('data-job');
+        if (!raw) return;
+        var job;
+        try { job = JSON.parse(raw); } catch (e) { return; }
+
+        var detail = document.getElementById('history-detail');
+        if (!detail) return;
+
+        // Toggle off when clicking the already-selected row.
+        if (_selectedJobId && _selectedJobId === job.job_id) {
+            _selectedJobId  = null;
+            _selectedJobRaw = null;
+            detail.style.display = 'none';
+            document.querySelectorAll('.history-row').forEach(function (r) {
+                r.classList.remove('history-row-selected');
+            });
+            return;
+        }
+
+        _selectedJobId  = job.job_id;
+        _selectedJobRaw = job;
+        document.querySelectorAll('.history-row').forEach(function (r) {
+            r.classList.toggle('history-row-selected', r === rowEl);
+        });
+
+        detail.innerHTML = renderJobDetail(job);
+        detail.style.display = '';
+    }
+
+    function renderJobDetail(job) {
+        var html = '';
+
+        // Meta line: preset + pretrained badge
+        var meta = [];
+        if (job.preset) {
+            meta.push('Preset: <span class="badge-preset">' + _esc(job.preset) + '</span>');
+        }
+        if (job.pretrained_bootstrap) {
+            meta.push('<span style="color:#166534">&#x2713; pretrained bootstrap</span>');
+        }
+        if (meta.length) {
+            html += '<div style="margin-bottom:0.6rem">' + meta.join(' &nbsp;&middot;&nbsp; ') + '</div>';
+        }
+
+        // Artifact scans
+        var scans = job.artifact_paths || [];
+        if (scans.length) {
+            html += '<div class="history-detail-section">Artifacts '
+                  + '<button onclick="refreshArtifacts()" '
+                  + 'style="font-size:0.7rem;padding:0.1rem 0.4rem;background:#f1f5f9;color:#52525b;'
+                  + 'border:1px solid #d4d4d8;border-radius:4px;cursor:pointer;font-weight:500">'
+                  + '&#x21bb; Refresh</button></div>';
+            html += '<div id="artifact-rows">' + renderArtifactRows(scans) + '</div>';
+        }
+
+        // Config snapshot (non-empty fields only)
+        var snap     = job.config_snapshot || {};
+        var snapKeys = Object.keys(snap).filter(function (k) { return snap[k]; });
+        if (snapKeys.length) {
+            html += '<div class="history-detail-section" style="margin-top:0.65rem">Config snapshot</div>';
+            html += '<table style="width:100%;border-collapse:collapse;'
+                  + 'font-family:ui-monospace,monospace;font-size:0.78rem">';
+            snapKeys.forEach(function (k) {
+                html += '<tr>'
+                      + '<td style="color:#71717a;padding:0.1rem 0.5rem 0.1rem 0;'
+                      + 'white-space:nowrap;width:9rem">' + _esc(k) + '</td>'
+                      + '<td style="word-break:break-all">' + _esc(snap[k]) + '</td>'
+                      + '</tr>';
+            });
+            html += '</table>';
+        }
+
+        return html || '<span style="color:#a1a1aa">No detail available.</span>';
+    }
+
+    function renderArtifactRows(scans) {
+        return scans.map(function (s) {
+            var parts  = (s.path || '').replace(/\\/g, '/').split('/');
+            var name   = parts[parts.length - 1] || s.path;
+            var count, color;
+            if (!s.exists) {
+                count = 'not found'; color = '#a1a1aa';
+            } else if (s.file_count === null || s.file_count === undefined) {
+                count = '?'; color = '#52525b';
+            } else {
+                count = s.file_count + (s.truncated ? '+ files' : ' files');
+                color = s.file_count > 0 ? '#166534' : '#71717a';
+            }
+            var mtime = (s.exists && s.mtime)
+                ? ' &middot; ' + new Date(s.mtime * 1000).toLocaleTimeString()
+                : '';
+            return '<div class="artifact-row" style="color:' + color + '">'
+                 + '<strong>' + _esc(name) + '</strong>: ' + count + mtime
+                 + '</div>';
+        }).join('');
+    }
+
+    function refreshArtifacts() {
+        if (!_selectedJobRaw) return;
+        var dirs = (_selectedJobRaw.artifact_paths || [])
+            .map(function (s) { return s.path; })
+            .filter(Boolean);
+        if (!dirs.length) return;
+
+        fetch('/artifacts/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dirs: dirs }),
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                var el = document.getElementById('artifact-rows');
+                if (el) el.innerHTML = renderArtifactRows(data.scans || []);
+                // Update stored job so Refresh works again with fresh paths.
+                if (_selectedJobRaw) _selectedJobRaw.artifact_paths = data.scans || [];
+            })
+            .catch(function () {});
+    }
+
+    // After HTMX swaps the history panel, re-apply row selection highlight.
+    document.addEventListener('htmx:afterSwap', function (e) {
+        var target = e.detail && e.detail.target;
+        if (!target || target.id !== 'history-panel') return;
+        if (!_selectedJobId) return;
+        document.querySelectorAll('.history-row').forEach(function (r) {
+            if (r.getAttribute('data-job-id') === _selectedJobId) {
+                r.classList.add('history-row-selected');
+            }
+        });
+    });
+
+    // Expose for inline onclick in the detail panel.
+    window.showJobDetail    = showJobDetail;
+    window.refreshArtifacts = refreshArtifacts;
+
+    // ── Export / Import bundle ────────────────────────────────────────────────
+
+    function exportBundle() {
+        var btn = document.getElementById('export-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Exporting\u2026'; }
+
+        fetch('/bundle/export')
+            .then(function (r) {
+                if (!r.ok) throw new Error('Server error ' + r.status);
+                return r.json();
+            })
+            .then(function (data) {
+                var json = JSON.stringify(data, null, 2);
+                var blob = new Blob([json], { type: 'application/json' });
+                var url  = URL.createObjectURL(blob);
+                var a    = document.createElement('a');
+                var ts   = new Date(data.exported_at * 1000)
+                               .toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                a.href     = url;
+                a.download = 'dfl_bundle_' + ts + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showBundleMsg(
+                    'Exported: ' + (data.presets || []).length + ' preset(s), '
+                    + (data.recent_jobs || []).length + ' job(s).',
+                    'ok'
+                );
+            })
+            .catch(function (err) {
+                showBundleMsg('Export failed: ' + err.message, 'error');
+            })
+            .finally(function () {
+                if (btn) { btn.disabled = false; btn.textContent = '\u21E9 Export bundle'; }
+            });
+    }
+
+    function importBundle() {
+        var fileInput = document.getElementById('bundle-file-input');
+        var file = fileInput && fileInput.files[0];
+        if (!file) { showBundleMsg('Select a .json bundle file first.', 'warn'); return; }
+
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            var text = e.target.result;
+            var data;
+            try { data = JSON.parse(text); } catch (err) {
+                showBundleMsg('Invalid JSON: ' + err.message, 'error');
+                return;
+            }
+
+            var presetCount = (data.presets      || []).length;
+            var jobCount    = (data.recent_jobs   || []).length;
+            var msg = 'This will REPLACE the current config, '
+                    + presetCount + ' preset(s), and job history ('
+                    + jobCount + ' record(s)).\n\nProceed?';
+            if (!confirm(msg)) return;
+
+            var btn = document.getElementById('import-btn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Importing\u2026'; }
+
+            fetch('/bundle/import', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    text,
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (resp) {
+                    if (resp.ok) {
+                        showBundleMsg(
+                            'Import complete \u2014 reloading\u2026  ('
+                            + presetCount + ' preset(s), ' + jobCount + ' job(s) restored)',
+                            'ok'
+                        );
+                        setTimeout(function () { window.location.reload(); }, 1200);
+                    } else {
+                        var errs = resp.detail && resp.detail.errors
+                            ? resp.detail.errors : ['Unknown error'];
+                        showBundleMsg('Import failed: ' + errs.join('; '), 'error');
+                    }
+                })
+                .catch(function () {
+                    showBundleMsg('Import failed \u2014 could not reach server.', 'error');
+                })
+                .finally(function () {
+                    if (btn) { btn.disabled = false; btn.textContent = 'Import'; }
+                });
+        };
+        reader.readAsText(file);
+    }
+
+    function showBundleMsg(text, kind) {
+        var el = document.getElementById('bundle-messages');
+        if (!el) return;
+        el.className   = 'msg msg-' + kind;
+        el.textContent = text;
+    }
+
+    window.exportBundle = exportBundle;
+    window.importBundle = importBundle;
+
+    // ── Data snapshots ────────────────────────────────────────────────────────
+
+    function createSnapshot() {
+        var btn = document.getElementById('snap-create-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Creating\u2026'; }
+        showSnapMsg('Creating snapshot\u2026', 'ok');
+
+        fetch('/backup/create', { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    var parts = ['Snapshot created'];
+                    if (data.components && data.components.length)
+                        parts.push(data.components.join(', '));
+                    if (data.skipped && data.skipped.length)
+                        parts.push('skipped: ' + data.skipped.join('; '));
+                    showSnapMsg(parts.join(' \u2014 '), 'ok');
+                    reloadSnapshotPanel();
+                } else {
+                    showSnapMsg('Create failed: ' + (data.detail || data.error || 'unknown error'), 'error');
+                }
+            })
+            .catch(function () {
+                showSnapMsg('Create failed \u2014 could not reach server.', 'error');
+            })
+            .finally(function () {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '\uD83D\uDCBE Create Snapshot';
+                }
+            });
+    }
+
+    function restoreSnapshot(snap) {
+        var comps = (snap.components || []).join(', ') || 'unknown components';
+        var label = snap.label ? ' (' + snap.label + ')' : '';
+        var msg   = 'Restore snapshot from ' + new Date(snap.created_at * 1000).toLocaleString()
+                  + label + '?\n\nComponents: ' + comps
+                  + '\n\nExisting files in target directories will be overwritten. Continue?';
+        if (!confirm(msg)) return;
+
+        showSnapMsg('Restoring\u2026', 'ok');
+
+        fetch('/backup/restore', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+                path:            snap.path,
+                restore_model:   snap.components.indexOf('model') >= 0,
+                restore_aligned: snap.components.indexOf('aligned_src') >= 0
+                               || snap.components.indexOf('aligned_dst') >= 0,
+            }),
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    showSnapMsg('Restored: ' + (data.restored || []).join(', '), 'ok');
+                } else {
+                    showSnapMsg('Restore failed: ' + (data.detail || data.error || 'unknown error'), 'error');
+                }
+            })
+            .catch(function () {
+                showSnapMsg('Restore failed \u2014 could not reach server.', 'error');
+            });
+    }
+
+    function reloadSnapshotPanel() {
+        var card = document.getElementById('snapshots-card');
+        if (!card) return;
+        var inner = card.querySelector('[hx-get="/snapshots/partial"]');
+        if (inner && window.htmx) window.htmx.trigger(inner, 'reload');
+        // Fallback: fetch and replace innerHTML directly.
+        else if (inner) {
+            fetch('/snapshots/partial')
+                .then(function (r) { return r.text(); })
+                .then(function (html) { inner.innerHTML = html; })
+                .catch(function () {});
+        }
+    }
+
+    function showSnapMsg(text, kind) {
+        var el = document.getElementById('snapshot-messages');
+        if (!el) return;
+        el.className   = 'msg msg-' + kind;
+        el.textContent = text;
+    }
+
+    window.createSnapshot  = createSnapshot;
+    window.restoreSnapshot = restoreSnapshot;
+
+    // ── Shared helpers ────────────────────────────────────────────────────────
+
+    function _esc(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    // Expose for inline onclick attributes.
+    window.applyPreset   = applyPreset;
+    window.saveAsPreset  = saveAsPreset;
+    window.deletePreset  = deletePreset;
+    window.checkPaths    = checkPaths;
+
+    // Load roots, profiles, and presets once on page load (non-blocking, best-effort).
+    document.addEventListener('DOMContentLoaded', function () {
+        loadRoots();
+        loadProfiles();
+        loadPresets();
+    });
+
+    // Re-check drift after config is saved via the HTMX form.
+    document.addEventListener('htmx:afterSwap', function (e) {
+        var target = e.detail && e.detail.target;
+        if (target && target.id === 'config-form') {
+            checkDrift();
+        }
+    });
+
+})();
+</script>
+{% endblock %}

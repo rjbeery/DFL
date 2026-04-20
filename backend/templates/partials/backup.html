@@ -1,0 +1,33 @@
+<div id="backup-panel">
+
+    <div class="btn-row" style="margin-bottom:0.65rem">
+        <button class="btn-backup"
+                hx-post="/ui/backup"
+                hx-target="#backup-messages"
+                hx-swap="outerHTML"
+                hx-indicator="#backup-panel">
+            Backup Now
+        </button>
+    </div>
+
+    <div id="backup-messages">
+    {% if last_backup %}
+        {% if last_backup.ok %}
+        <div class="msg msg-ok">
+            <div>&#x2713; {{ last_backup.destination }}</div>
+            {% if last_backup.copied %}
+            <div style="margin-top:0.2rem;font-size:0.78rem">
+                Copied: {{ last_backup.copied | join(", ") }}
+                {% if last_backup.skipped %}
+                &nbsp;·&nbsp; Skipped: {{ last_backup.skipped | join("; ") }}
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="msg msg-error">&#x2717; {{ last_backup.error }}</div>
+        {% endif %}
+    {% endif %}
+    </div>
+
+</div>
